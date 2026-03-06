@@ -1,11 +1,15 @@
 import plotly.graph_objects as go
-
+from plotly.subplots import make_subplots   
 
 def _build_chart(df, ticker: str, months: int, include_sma: bool):
 
     df_display = df.last(f"{months}M")
 
-    fig = go.Figure()
+    fig = make_subplots(
+        rows=2,cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.7, 0.3])
 
     # Candlestick
     fig.add_trace(go.Candlestick(
@@ -15,7 +19,7 @@ def _build_chart(df, ticker: str, months: int, include_sma: bool):
         low=df_display["Low"],
         close=df_display["Close"],
         name="Price"
-    ))
+    ),row=1, col=1)
 
     if include_sma:
         fig.add_trace(go.Scatter(
@@ -23,14 +27,25 @@ def _build_chart(df, ticker: str, months: int, include_sma: bool):
             y=df_display["SMA50"],
             mode="lines",
             name="50 SMA"
-        ))
+        ),row=1, col=1)
 
         fig.add_trace(go.Scatter(
             x=df_display.index,
             y=df_display["SMA200"],
             mode="lines",
             name="200 SMA"
-        ))
+        ),row=1, col=1)
+    #RSI plot
+    fig.add_trace(
+        go.Scatter(
+            x=df_display.index,
+            y=df_display["RSI"],
+            mode="lines",
+            name="RSI"
+    ,),row=2, col=1 )
+
+    fig.add_hline(y=70, line_dash="dash", row=2, col=1)
+    fig.add_hline(y=30, line_dash="dash", row=2, col=1)
 
     fig.update_layout(
         title=f"{ticker} - {months} Month Chart",
