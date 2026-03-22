@@ -18,3 +18,16 @@ def data_prepared(ticker, period):
 def get_stock_info(ticker):
     stock = yf.Ticker(ticker)
     return stock.info
+
+
+def format_market_cap(value):
+    if value >= 1e12:
+        return f"{value/1e12:.2f}T"
+    elif value >= 1e9:
+        return f"{value/1e9:.2f}B"
+    elif value >= 1e6:
+        return f"{value/1e6:.2f}M"
+    else:
+        return f"{value:,}"
+    
+
