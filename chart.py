@@ -1,5 +1,6 @@
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots   
+from indicators import support_restantce_bands
 
 def _build_chart(df, ticker: str, months: int, include_sma: bool):
 
@@ -47,6 +48,28 @@ def _build_chart(df, ticker: str, months: int, include_sma: bool):
     fig.add_hline(y=70, line_dash="dash", row=2, col=1)
     fig.add_hline(y=30, line_dash="dash", row=2, col=1)
 
+    #this is only for 3y support bands and resistance bands 
+    if months == 36 and not df_display.empty:
+
+        support, resistance = support_restantce_bands(df_display)
+        fig.add_hline(
+        y=support,
+        line_dash="dash",
+        line_color="green",
+        annotation_text="Support",
+        annotation_position="bottom right",
+        row=1, col=1
+        )
+
+        fig.add_hline(
+        y=resistance,
+        line_dash="dash",
+        line_color="red",
+        annotation_text="Resistance",
+        annotation_position="top right",
+        row=1, col=1
+        )
+    
     fig.update_layout(
         title=f"{ticker} - {months} Month Chart",
         xaxis_rangeslider_visible=False,
@@ -66,3 +89,7 @@ def plot_6mo(df, ticker):
 
 def plot_1y(df, ticker):
     return _build_chart(df, ticker, 12, include_sma=True)
+
+def plot_3y(df, ticker):
+    return _build_chart(df, ticker, 36, include_sma=True)
+
