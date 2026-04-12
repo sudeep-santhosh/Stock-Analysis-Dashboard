@@ -40,6 +40,25 @@ COMPANY_STOPWORDS = {
     "and",
 }
 
+BLOCKED_DOMAINS = {
+    "reuters.com",
+    "business-standard.com",
+    "zeebiz.com",
+    "goodreturns.in",
+    "equitymaster.com",
+    "news18.com",
+    "firstpost.com",
+    "ndtv.com",
+    "ndtvprofit.com",
+    "investing.com",
+    "tmcnet.com",
+    "forbes.com",
+    "hindustantimes.com",
+    "hoodline.com",
+    "insidermedia.com",
+    "nai500.com",
+}
+
 
 def normalize_ns_ticker(ticker_symbol: str) -> str:
     """
@@ -137,3 +156,86 @@ def clean_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
     return text.strip()
+
+def resolve_redirect_url(url: str) -> Optional[str]:
+    """
+    Follow redirect-style links and return the final destination URL.
+    """
+    try:
+        response = requests.get(
+            url,
+            headers=DEFAULT_HEADERS,
+            timeout=20,
+            allow_redirects=True,
+        )
+        response.raise_for_status()
+        final_url = response.url
+        parsed = urlparse(final_url)
+        if parsed.scheme in {"http", "https"} and "google." not in parsed.netloc:
+            return final_url
+    except requests.RequestException:
+        return None
+
+    return None
+
+
+def search_google_news_rss(queries: List[str], max_links: int = 10) -> List[str]:
+    """
+    Use Google News RSS as the primary source because it is more stable than
+    scraping the standard HTML results page.
+    """
+    links: List[str] = []
+    seen = set()
+    for query in queries:
+        rss_url = (
+            "https://news.google.com/rss/search?"
+            f"q={quote_plus(query)}&hl=en-IN&gl=IN&ceid=IN:en"
+        )
+
+        try:
+            response = requests.get(rss_url, headers=DEFAULT_HEADERS, timeout=15)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            print(f"RSS search request failed: {exc}")
+            continue
+
+        soup = BeautifulSoup(response.content, "xml")
+
+        for item in soup.find_all("item"):
+            link_tag = item.find("link")
+            if not link_tag or not link_tag.text:
+                continue
+
+            raw_link = link_tag.text.strip()
+            clean_link = resolve_redirect_url(raw_link) or normalize_google_link(raw_link) or raw_link
+            parsed = urlparse(clean_link)
+
+            if parsed.scheme not in {"http", "https"}:
+                continue
+
+            if "google." in parsed.netloc:
+                continue
+
+            if is_blocked_domain(clean_link):
+                continue
+
+            if clean_link in seen:
+                continue
+
+            seen.add(clean_link)
+            links.append(clean_link)
+
+            if len(links) >= max_links:
+                return links
+
+    return links
+
+def is_blocked_domain(url: str) -> bool:
+    """
+    Skip domains that repeatedly failed or blocked scraping in prior runs.
+    """
+    hostname = urlparse(url).netloc.lower().replace("www.", "")
+    return any(
+        hostname == domain or hostname.endswith(f".{domain}")
+        for domain in BLOCKED_DOMAINS
+    )
