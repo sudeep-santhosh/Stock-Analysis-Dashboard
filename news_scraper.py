@@ -239,3 +239,52 @@ def is_blocked_domain(url: str) -> bool:
         hostname == domain or hostname.endswith(f".{domain}")
         for domain in BLOCKED_DOMAINS
     )
+
+
+def search_bing_news_links(queries: List[str], max_links: int = 10) -> List[str]:
+    """
+    Scrape Bing News results, which often expose direct article links without
+    the consent-page issues seen on Google.
+    """
+    links: List[str] = []
+    seen = set()
+    page_offsets = [0, 11]
+
+    for query in queries:
+        for offset in page_offsets:
+            search_url = (
+                f"https://www.bing.com/news/search?q={quote_plus(query)}"
+                "&qft=sortbydate%3d%221%22&form=YFNR"
+            )
+            if offset:
+                search_url += f"&first={offset}"
+
+            try:
+                response = requests.get(search_url, headers=DEFAULT_HEADERS, timeout=15)
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                print(f"Bing News request failed: {exc}")
+                continue
+
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            for anchor in soup.select("a.title, .news-card a[href^='http'], .caption a[href^='http']"):
+                clean_link = anchor.get("href", "").strip()
+                parsed = urlparse(clean_link)
+
+                if parsed.scheme not in {"http", "https"}:
+                    continue
+
+                if is_blocked_domain(clean_link):
+                    continue
+
+                if clean_link in seen:
+                    continue
+
+                seen.add(clean_link)
+                links.append(clean_link)
+
+                if len(links) >= max_links:
+                    return links
+
+    return links
