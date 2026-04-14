@@ -288,3 +288,47 @@ def search_bing_news_links(queries: List[str], max_links: int = 10) -> List[str]
                     return links
 
     return links
+
+def search_bing_web_links(queries: List[str], max_links: int = 10) -> List[str]:
+    """
+    Use normal Bing web results as an additional fallback because some Indian
+    finance articles appear there but not in the news vertical.
+    """
+    links: List[str] = []
+    seen = set()
+
+    for query in queries:
+        search_url = f"https://www.bing.com/search?q={quote_plus(query)}"
+
+        try:
+            response = requests.get(search_url, headers=DEFAULT_HEADERS, timeout=15)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            print(f"Bing web request failed: {exc}")
+            continue
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        for anchor in soup.select("li.b_algo h2 a[href]"):
+            clean_link = anchor.get("href", "").strip()
+            parsed = urlparse(clean_link)
+
+            if parsed.scheme not in {"http", "https"}:
+                continue
+
+            if "bing.com" in parsed.netloc:
+                continue
+
+            if is_blocked_domain(clean_link):
+                continue
+
+            if clean_link in seen:
+                continue
+
+            seen.add(clean_link)
+            links.append(clean_link)
+
+            if len(links) >= max_links:
+                return links
+
+    return links
