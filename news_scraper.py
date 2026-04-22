@@ -332,3 +332,78 @@ def search_bing_web_links(queries: List[str], max_links: int = 10) -> List[str]:
                 return links
 
     return links
+
+
+def search_news_links(company_name: str, ticker_symbol: str, max_links: int = 10) -> List[str]:
+    """
+    Search for recent news and return candidate article URLs by aggregating
+    several sources instead of relying on a single search page.
+    """
+    queries = build_search_queries(company_name, ticker_symbol)
+    candidate_links: List[str] = []
+    seen = set()
+
+    for source_links in (
+        search_bing_news_links(queries, max_links=max_links),
+        search_google_news_rss(queries, max_links=max_links),
+        search_bing_web_links(queries, max_links=max_links),
+    ):
+        for link in source_links:
+            if link in seen:
+                continue
+            seen.add(link)
+            candidate_links.append(link)
+            if len(candidate_links) >= max_links:
+                return candidate_links
+
+    # Use Google's news vertical so the results are biased toward recent articles.
+    search_url = (
+        "https://www.google.com/search?"
+        f"q={quote_plus(company_name)}&tbm=nws"
+    )
+
+    try:
+        response = requests.get(search_url, headers=DEFAULT_HEADERS, timeout=15)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"Search request failed: {exc}")
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    found_links: List[str] = []
+    seen = set()
+
+    for anchor in soup.select("a[href]"):
+        clean_link = normalize_google_link(anchor.get("href", ""))
+        if not clean_link:
+            continue
+
+        # Keep only direct external article links and skip Google internal links.
+        parsed = urlparse(clean_link)
+        if parsed.scheme not in {"http", "https"}:
+            continue
+
+        if "google." in parsed.netloc:
+            continue
+
+        if is_blocked_domain(clean_link):
+            continue
+
+        if clean_link in seen:
+            continue
+
+        seen.add(clean_link)
+        found_links.append(clean_link)
+
+        if len(found_links) >= max_links:
+            break
+
+    for link in found_links:
+        if link in seen:
+            continue
+        seen.add(link)
+        candidate_links.append(link)
+        if len(candidate_links) >= max_links:
+            break
+
+    return candidate_links
