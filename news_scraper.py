@@ -407,3 +407,38 @@ def search_news_links(company_name: str, ticker_symbol: str, max_links: int = 10
             break
 
     return candidate_links
+
+
+def extract_date(soup: BeautifulSoup) -> str:
+    """
+    Try several common metadata patterns to find the publication date.
+    """
+    date_selectors = [
+        ("meta", {"property": "article:published_time"}),
+        ("meta", {"name": "pubdate"}),
+        ("meta", {"name": "publish-date"}),
+        ("meta", {"name": "publication_date"}),
+        ("meta", {"name": "date"}),
+        ("meta", {"itemprop": "datePublished"}),
+        ("time", {}),
+    ]
+
+    for tag_name, attrs in date_selectors:
+        element = soup.find(tag_name, attrs=attrs)
+        if not element:
+            continue
+
+        if tag_name == "meta":
+            content = element.get("content")
+            if content:
+                return content.strip()
+
+        datetime_value = element.get("datetime")
+        if datetime_value:
+            return datetime_value.strip()
+
+        text = element.get_text(" ", strip=True)
+        if text:
+            return text
+
+    return ""
