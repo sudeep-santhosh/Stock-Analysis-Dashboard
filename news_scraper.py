@@ -442,3 +442,58 @@ def extract_date(soup: BeautifulSoup) -> str:
             return text
 
     return ""
+
+
+def remove_noise(soup: BeautifulSoup) -> None:
+    """
+    Remove common non-content HTML elements before extracting text.
+    """
+    for tag in soup([
+        "script",
+        "style",
+        "noscript",
+        "header",
+        "footer",
+        "nav",
+        "aside",
+        "form",
+        "iframe",
+        "svg",
+    ]):
+        tag.decompose()
+
+    # Remove common ad, promo, and navigation blocks by class/id hints.
+    noise_patterns = re.compile(
+        r"(ad-|ads|advert|promo|banner|cookie|consent|newsletter|"
+        r"subscribe|social|related|nav|menu|footer|header|sidebar)",
+        re.IGNORECASE,
+    )
+
+    for element in soup.find_all(attrs={"class": True}):
+        if not getattr(element, "attrs", None):
+            continue
+
+        raw_classes = element.attrs.get("class") or []
+        classes = " ".join(raw_classes) if isinstance(raw_classes, list) else str(raw_classes)
+        if noise_patterns.search(classes):
+            element.decompose()
+
+    for element in soup.find_all(attrs={"id": True}):
+        if not getattr(element, "attrs", None):
+            continue
+
+        element_id = str(element.attrs.get("id", "") or "")
+        if noise_patterns.search(element_id):
+            element.decompose()
+
+
+def clean_text(text: str) -> str:
+    """
+    Normalize whitespace and remove leftover noisy fragments.
+    """
+    if not text:
+        return ""
+
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+    return text.strip()
