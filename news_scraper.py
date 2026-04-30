@@ -497,3 +497,35 @@ def clean_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
     return text.strip()
+
+
+def is_similar_text(left: str, right: str, threshold: float = 0.92) -> bool:
+    """
+    Detect near-duplicate paragraphs so repeated content can be collapsed.
+    """
+    if not left or not right:
+        return False
+
+    return SequenceMatcher(None, left, right).ratio() >= threshold
+
+
+def deduplicate_paragraphs(paragraphs: List[str]) -> List[str]:
+    """
+    Remove exact and near-duplicate paragraphs while preserving order.
+    """
+    unique_paragraphs: List[str] = []
+
+    for paragraph in paragraphs:
+        cleaned = clean_text(paragraph)
+        if not cleaned:
+            continue
+
+        if any(
+            cleaned == existing or is_similar_text(cleaned, existing)
+            for existing in unique_paragraphs
+        ):
+            continue
+
+        unique_paragraphs.append(cleaned)
+
+    return unique_paragraphs
